@@ -1,0 +1,41 @@
+# Imagem base leve com Python 3.11
+FROM python:3.11-slim
+
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    POETRY_VIRTUALENVS_CREATE=false
+
+# 1. Dependências do sistema
+RUN apt-get update && apt-get install -y \
+    openjdk-21-jre-headless \
+    poppler-utils ghostscript tesseract-ocr curl unzip \
+  && rm -rf /var/lib/apt/lists/*
+
+# 2. Poetry
+RUN pip install --upgrade pip && pip install poetry
+
+
+WORKDIR /app
+
+# 3. Dependências Python (primeiro metadados)
+COPY pyproject.toml poetry.lock* /app/
+RUN poetry install --no-root --no-interaction
+
+# 4. Audiveris 5.7.1 (código-fonte)
+RUN mkdir -p /opt/audiveris && \
+    curl -L -o /tmp/audiveris.zip \
+    https://github.com/Audiveris/audiveris/archive/refs/tags/5.7.1.zip && \
+    unzip /tmp/audiveris.zip -d /opt && \
+    mv /opt/audiveris-5.7.1 /opt/audiveris && \
+    rm /tmp/audiveris.zip
+
+
+COPY app/ /app/app/
+COPY data/ /app/data/
+
+
+EXPOSE 8000
+
+# 6. Comando padrão
+CMD ["poetry", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
