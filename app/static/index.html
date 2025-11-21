@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Anotar Acordes | OMR</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="hero">
+    <div class="brand">
+      <div class="logo">𝄞</div>
+      <div>
+        <p class="eyebrow">Utilitário de Partitura</p>
+        <h1>Anote acordes em suas partituras PDF</h1>
+        <p class="lede">Envie uma partitura sem cifras, deixe o app reconhecer as notas e gerar acordes sugeridos acima do pentagrama. Visual limpo, inspirado em papel pautado clássico.</p>
+      </div>
+    </div>
+    <div class="hero-card">
+      <h2>Upload rápido</h2>
+      <form id="upload-form">
+        <label class="file-picker">
+          <input type="file" id="pdf-input" accept="application/pdf" required />
+          <span id="file-label">Escolha um PDF</span>
+        </label>
+        <button type="submit">Gerar acordes</button>
+      </form>
+      <div class="status" id="status">Aguardando arquivo...</div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel">
+      <h3>Fluxo do processamento</h3>
+      <ol id="steps" class="steps">
+        <li><span class="bullet">1</span> Converter páginas do PDF em imagens de alta definição.</li>
+        <li><span class="bullet">2</span> Reconhecer padrões das notas e inferir harmonias.</li>
+        <li><span class="bullet">3</span> Aplicar cifras elegantes sobre cada sistema.</li>
+        <li><span class="bullet">4</span> Gerar um novo PDF pronto para download.</li>
+      </ol>
+    </section>
+
+    <section class="panel results" id="results" hidden>
+      <h3>Resumo dos acordes sugeridos</h3>
+      <div id="summary"></div>
+      <a id="download-link" class="download" href="#" download>Baixar partitura com acordes</a>
+    </section>
+  </main>
+
+  <footer class="footer">Interface em português • Tema branco, preto e azul suave • Processamento automático</footer>
+
+  <script src="/static/script.js"></script>
+</body>
+</html>
