@@ -1,42 +1,71 @@
-from fastapi import FastAPI, UploadFile, File
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
-from pathlib import Path
+from __future__ import annotations
+
 import uuid
+from pathlib import Path
+
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from PIL import Image
+
+from .annotate import annotate_score
+from .harmonize import Harmonizer
 from .pdf_to_img import pdf_to_images
-from .omr import run_audiveris_on_images
-from .parse_musicxml import extract_notes_to_txt
 from .settings import settings
 
-app = FastAPI(title="OMR Notes Extractor")
+app = FastAPI(title="Anotador de Acordes para Partituras")
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
 
 @app.get("/", response_class=HTMLResponse)
-def index():
+def index() -> HTMLResponse:
     html = Path("app/static/index.html").read_text(encoding="utf-8")
-    return HTMLResponse(html)
+    return HTMLResponse(content=html)
 
-@app.post("/extract")
-async def extract_notes(pdf: UploadFile = File(...)):
+
+@app.post("/api/process")
+async def process_pdf(pdf: UploadFile = File(...)):
+    if not pdf.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Envie um arquivo PDF.")
+
     run_id = uuid.uuid4().hex[:8]
     work_dir = Path(settings.OUTPUT_DIR) / run_id
     work_dir.mkdir(parents=True, exist_ok=True)
-    pdf_path = work_dir / pdf.filename
-    pdf_path.write_bytes(await pdf.read())
 
-    imgs_dir = work_dir / "pages"
-    pdf_to_images(pdf_path, imgs_dir)
+    original_pdf_path = work_dir / "partitura.pdf"
+    original_pdf_path.write_bytes(await pdf.read())
 
-    xml_dir = work_dir / "xml"
-    musicxml_path = run_audiveris_on_images(imgs_dir, xml_dir)
+    pages_dir = work_dir / "paginas"
+    page_images = pdf_to_images(original_pdf_path, pages_dir)
+    if not page_images:
+        raise HTTPException(status_code=400, detail="Não foi possível converter o PDF em imagens.")
 
-    lines = extract_notes_to_txt(musicxml_path)
-    txt_path = work_dir / "notes.txt"
-    txt_path.write_text("\n".join(lines), encoding="utf-8")
+    harmonizer = Harmonizer()
+    annotated_pages: list[Path] = []
+    resumo: list[dict[str, object]] = []
 
-    return {"txt_path": str(txt_path), "musicxml_path": str(musicxml_path), "run_id": run_id}
+    for idx, image_path in enumerate(page_images, start=1):
+        chords = harmonizer.infer_chords_from_image(image_path)
+        out_img = work_dir / "anotadas" / f"page_{idx:03d}.png"
+        annotate_score(image_path, chords, out_img)
+        annotated_pages.append(out_img)
+        resumo.append({"pagina": idx, "acordes": chords})
 
-@app.get("/download")
-def download(path: str):
-    p = Path(path)
-    if not p.exists():
-        return JSONResponse({"error": "Arquivo não encontrado"}, status_code=404)
-    return FileResponse(p)
+    output_pdf = work_dir / "partitura_com_acordes.pdf"
+    first_image = Image.open(annotated_pages[0]).convert("RGB")
+    remaining = [Image.open(p).convert("RGB") for p in annotated_pages[1:]]
+    first_image.save(output_pdf, save_all=True, append_images=remaining, format="PDF")
+
+    return {
+        "run_id": run_id,
+        "download_url": f"/download/{run_id}",
+        "resumo": resumo,
+    }
+
+
+@app.get("/download/{run_id}")
+def download(run_id: str):
+    pdf_path = Path(settings.OUTPUT_DIR) / run_id / "partitura_com_acordes.pdf"
+    if not pdf_path.exists():
+        return JSONResponse({"erro": "Arquivo não encontrado"}, status_code=404)
+    return FileResponse(pdf_path, filename=pdf_path.name, media_type="application/pdf")
